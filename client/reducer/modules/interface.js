@@ -22,7 +22,10 @@ const initialState = {
   totalTableList: [],
   catTableList: [],
   count: 0,
-  totalCount: 0
+  totalCount: 0,
+  selectedProject: undefined,
+  selectedCategory: undefined,
+  selectedGroup: undefined
 };
 
 export default (state = initialState, action) => {

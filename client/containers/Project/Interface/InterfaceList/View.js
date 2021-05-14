@@ -2,7 +2,7 @@ import './View.scss';
 import React, { PureComponent as Component } from 'react';
 import { connect } from 'react-redux';
 import PropTypes from 'prop-types';
-import { Table, Icon, Row, Col, Tooltip, message } from 'antd';
+import {Table, Icon, Row, Col, Tooltip, message, Select} from 'antd';
 import { Link } from 'react-router-dom';
 import AceEditor from 'client/components/AceEditor/AceEditor';
 import { formatTime, safeArray } from '../../../../common.js';
@@ -11,15 +11,34 @@ import variable from '../../../../constants/variable';
 import constants from '../../../../constants/variable.js';
 import copy from 'copy-to-clipboard';
 import SchemaTable from '../../../../components/SchemaTable/SchemaTable.js';
+import {
+  fetchProjectList
+} from '../../../../reducer/modules/project.js';
+import {fetchGroupList} from "../../../../reducer/modules/group";
+import {fetchInterfaceData, fetchInterfaceListMenu} from "../../../../reducer/modules/interface";
+import produce from "immer";
+import axios from "axios";
 
 const HTTP_METHOD = constants.HTTP_METHOD;
+const Option = Select.Option;
 
 @connect(state => {
   return {
     curData: state.inter.curdata,
     custom_field: state.group.field,
-    currProject: state.project.currProject
+    currProject: state.project.currProject,
+    groupList: state.group.groupList,
+    projectList: state.project.projectList,
+    catList: state.inter.list,
+    selectedProject: state.selectedProject,
+    selectedCategory: state.selectedCategory,
+    selectedGroup: state.selectedGroup
   };
+}, {
+    fetchGroupList,
+    fetchProjectList,
+    fetchInterfaceListMenu,
+    fetchInterfaceData
 })
 class View extends Component {
   constructor(props) {
@@ -32,7 +51,20 @@ class View extends Component {
   static propTypes = {
     curData: PropTypes.object,
     currProject: PropTypes.object,
-    custom_field: PropTypes.object
+    custom_field: PropTypes.object,
+    groupList: PropTypes.array,
+    projectList: PropTypes.array,
+    catList: PropTypes.array,
+    selectedGroup: PropTypes.number,
+    selectedProject: PropTypes.number,
+    selectedCategory: PropTypes.number,
+    fetchGroupList: PropTypes.func,
+    fetchProjectList: PropTypes.func,
+    fetchInterfaceListMenu: PropTypes.func,
+    searchGroup: PropTypes.func,
+    searchProject: PropTypes.func,
+    searchCategory: PropTypes.func,
+    fetchInterfaceData: PropTypes.func
   };
 
   req_body_form(req_body_type, req_body_form) {
@@ -222,6 +254,11 @@ class View extends Component {
     if (!this.props.curData.title && this.state.init) {
       this.setState({ init: false });
     }
+    let that = this;
+    new Promise(async function (resolve) {
+      await that.props.fetchGroupList();
+      resolve();
+    });
   }
 
   enterItem = () => {
@@ -251,6 +288,106 @@ class View extends Component {
     } else {
       return;
     }
+  };
+
+  copyInterface = async () => {
+    if (!this.state.selectedCategory || !this.state.selectedProject) {
+      return message.error("未选择正确的项目或分类");
+    }
+    let interfaceData = await this.props.fetchInterfaceData(this.props.curData._id);
+    let data = interfaceData.payload.data.data;
+    let that = this;
+    let newData = produce(data, draftData => {
+      draftData.title = draftData.title + '_copy';
+      draftData.path = draftData.path + '_' + Date.now();
+      draftData.project_id = parseInt(that.state.selectedProject);
+      draftData.catid = parseInt(that.state.selectedCategory);
+    });
+
+    axios.post('/api/interface/add', newData).then(async res => {
+      if (res.data.errcode !== 0) {
+        return message.error(res.data.errmsg);
+      }
+      message.success('接口添加成功');
+      // let interfaceId = res.data.data._id;
+      // await this.getList();
+      // this.props.history.push('/project/' + this.props.projectId + '/interface/api/' + interfaceId);
+      // this.setState({
+      //   visible: false
+      // });
+    });
+  };
+
+  searchGroup = async (groupName) => {
+    await this.props.fetchGroupList();
+    for (let group in this.props.groupList) {
+      if (groupName === group.group_name) {
+        this.props.selectedGroup = group._id;
+        break;
+      }
+    }
+  };
+
+  searchProject = async (projectName) => {
+    await this.props.fetchProjectList(this.props.selectedGroup);
+    for (let project in this.props.projectList) {
+      if (projectName === project.projectname) {
+        this.props.selectedProject = project.projectid;
+        break;
+      }
+    }
+  };
+  searchCategory = async (categoryName) => {
+    await this.props.fetchInterfaceListMenu(this.props.selectedProject);
+    for (let category in this.props.catList) {
+      if (categoryName === category.name) {
+        this.props.selectedCategory = category._id;
+        break;
+      }
+    }
+  };
+
+  handleGroupSearch = value => {
+    let that = this;
+    return new Promise(async function (resolve) {
+      await that.searchGroup(value);
+      resolve();
+    });
+  };
+
+  handleProjectSearch = value => {
+    let that = this;
+    return new Promise(async function (resolve) {
+      await that.searchProject(value);
+      resolve();
+    });
+  };
+
+  handleCategorySearch = value => {
+    let that = this;
+    return new Promise(async function (resolve) {
+      await that.searchCategory(value);
+      resolve();
+    });
+  };
+
+  handleGroupChange = async selectedGroup => {
+    let that = this;
+    this.setState({ selectedGroup });
+    await that.props.fetchProjectList(selectedGroup);
+  };
+
+  handleProjectChange = selectedProject => {
+    let that = this;
+    this.setState({ selectedProject });
+    new Promise(async function (resolve) {
+      await that.props.fetchInterfaceListMenu(selectedProject);
+      resolve();
+    });
+  };
+
+  handleCategoryChange = selectedCategory => {
+    this.setState({ selectedCategory });
   };
 
   render() {
@@ -374,6 +511,11 @@ class View extends Component {
 
     const { tag, up_time, title, uid, username } = this.props.curData;
 
+    const { projectList = [], catList = [], groupList = [] } = this.props;
+    const groupOptions = groupList.map(d => <Option key={d._id}>{d.group_name}</Option>) || [];
+    const projectOptions = projectList.map(d => <Option key={d.projectid || d._id}>{d.projectname}</Option>) || [];
+    const categoryOptions = catList.map(d => <Option key={d._id}>{d.name}</Option>) || [];
+
     let res = (
       <div className="caseContainer">
         <h2 className="interface-title" style={{ marginTop: 0 }}>
@@ -446,6 +588,69 @@ class View extends Component {
                   className="interface-url-icon"
                   onClick={() => this.copyUrl(this.props.currProject.basepath + this.props.curData.path)}
                   style={{ display: this.state.enter ? 'inline-block' : 'none' }}
+                />
+              </Tooltip>
+            </Col>
+          </Row>
+          <Row className="row">
+            <Col span={4} className="colKey">
+              复&ensp;制&ensp;到：
+            </Col>
+            <Col span={4} className="colKey">
+              <Select
+                showSearch
+                value={this.props.selectedGroup}
+                placeholder="输入分组名称"
+                defaultActiveFirstOption={false}
+                showArrow={false}
+                filterOption={false}
+                onSearch={this.handleGroupSearch}
+                onChange={this.handleGroupChange}
+                notFoundContent={null}
+              >
+                {groupOptions}
+              </Select>
+            </Col>
+            <Col span={4} className="colKey">
+              <Select
+                showSearch
+                value={this.props.selectedProject}
+                placeholder="输入项目名称"
+                defaultActiveFirstOption={false}
+                showArrow={false}
+                filterOption={false}
+                onSearch={this.handleProjectSearch}
+                onChange={this.handleProjectChange}
+                notFoundContent={null}
+              >
+                {projectOptions}
+              </Select>
+            </Col>
+            <Col span={4} className="colKey">
+              <Select
+                showSearch
+                value={this.props.selectedCategory}
+                placeholder="输入分类名称"
+                defaultActiveFirstOption={false}
+                showArrow={false}
+                filterOption={false}
+                onSearch={this.handleCategorySearch}
+                onChange={this.handleCategoryChange}
+                notFoundContent={null}
+              >
+                {categoryOptions}
+              </Select>
+            </Col>
+            <Col span={4} className="colKey">
+              <Tooltip title="复制接口">
+                <Icon
+                  type="copy"
+                  className="interface-delete-icon"
+                  onClick={e => {
+                    e.stopPropagation();
+                    this.copyInterface();
+                  }}
+                  style={{ display: 'block' }}
                 />
               </Tooltip>
             </Col>
