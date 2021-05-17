@@ -2,6 +2,7 @@ import React, { PureComponent as Component } from 'react';
 import { connect } from 'react-redux';
 import PropTypes from 'prop-types';
 import {
+  fetchCatList,
   fetchInterfaceListMenu,
   fetchInterfaceList,
   fetchInterfaceCatList,
@@ -32,7 +33,6 @@ const headHeight = 240; // menu顶部到网页顶部部分的高度
 
 @connect(
   state => {
-    console.log('state', state)
     return {
       list: state.inter.list,
       inter: state.inter.curdata,
@@ -40,10 +40,11 @@ const headHeight = 240; // menu顶部到网页顶部部分的高度
       expands: [],
       groupList: state.group.groupList,
       projectList: state.project.projectList,
-      catList: state.inter.list
+      catList: state.inter.catList
     };
   },
   {
+    fetchCatList,
     fetchInterfaceListMenu,
     fetchInterfaceData,
     deleteInterfaceCatData,
@@ -66,6 +67,7 @@ class InterfaceMenu extends Component {
     groupList: PropTypes.array,
     projectList: PropTypes.array,
     catList: PropTypes.array,
+    fetchCatList: PropTypes.func,
     fetchInterfaceListMenu: PropTypes.func,
     curProject: PropTypes.object,
     fetchInterfaceData: PropTypes.func,
@@ -121,7 +123,8 @@ class InterfaceMenu extends Component {
       expands: null,
       list: [],
       copy_modal_visible: false,
-      copyOptions: null
+      copyOptions: null,
+      chooseNoteId: ''
     };
   }
 
@@ -298,71 +301,68 @@ class InterfaceMenu extends Component {
     });
   };
 
-
-  // handleProjectSearch = value => {
-  //   console.log('handleProjectSearch', value)
-  //   // let that = this;
-  //   // return new Promise(async function (resolve) {
-  //   //   await that.searchProject(value);
-  //   //   resolve();
-  //   // });
-  // };
-
-
-
   // 提交复制
   onSubmitCopy = async (params) =>{
-    console.log('params', params)
-    // if (!this.state.selectedCategory || !this.state.selectedProject) {
-    //   return message.error("未选择正确的项目或分类");
-    // }
-    // let interfaceData = await this.props.fetchInterfaceData(this.props.curData._id);
-    // let data = interfaceData.payload.data.data;
-    // let that = this;
-    // let newData = produce(data, draftData => {
-    //   draftData.title = draftData.title + '_copy';
-    //   draftData.path = draftData.path + '_' + Date.now();
-    //   draftData.project_id = parseInt(that.state.selectedProject);
-    //   draftData.catid = parseInt(that.state.selectedCategory);
-    // });
+    const {group_id, project_id, catid} = params;
+    const {projectId, curProject = {}} = this.props
+    const {group_id:curGroupId = ''} = curProject
+    const {chooseNoteId} = this.state
+    const {payload = {}} = await this.props.fetchInterfaceData(chooseNoteId);
+    const {data = {}} = payload.data;
+    const newData = produce(data, draftData => {
+      draftData.title = draftData.title + '_copy';
+      draftData.path = draftData.path + '_' + Date.now();
+      draftData.project_id = parseInt(project_id);
+      draftData.catid = parseInt(catid);
+    })
 
-    // axios.post('/api/interface/add', newData).then(async res => {
-    //   if (res.data.errcode !== 0) {
-    //     return message.error(res.data.errmsg);
-    //   }
-    //   message.success('接口复制成功');
-    // });
+    axios.post('/api/interface/add', newData).then(async res => {
+      if (res.data.errcode !== 0) {
+        return message.error(res.data.errmsg);
+      }
+      message.success('接口复制成功');
+      this.onCopyModel(false);
+
+      if (projectId && curGroupId.toString() === group_id) {
+        const interfaceId = res.data.data._id;
+        await this.getList();
+        this.props.history.push('/project/' + projectId + '/interface/api/' + interfaceId);
+        this.setState({visible: false});
+      }
+    });
   }
 
   // 打开关闭复制Model
-  onCopyModel = (val) => {
+  onCopyModel = (val, id) => {
     this.setState({'copy_modal_visible': val});
-    const copyOptions = {groupList: [], projectList: [], catList: []}
+    const copyOptions = {groupList: [], projectList: [], catList: []};
 
-    if(val) {
+    if (val) {
       const { groupList = [] } = this.props;
-      copyOptions.groupList = groupList
-      this.setState({copyOptions})
+      copyOptions.groupList = groupList;
+      this.setState({copyOptions});
+      this.setState({chooseNoteId: id});
     } else {
-      this.setState({copyOptions})
+      this.setState({copyOptions});
+      this.setState({chooseNoteId: ''});
     }
   }
 
   searchProject = async (value) => {
     await this.props.fetchProjectList(value);
-    const { projectList = [] } = this.props
-    const copyOptions = {...this.state.copyOptions}
-    copyOptions.projectList = projectList
-    copyOptions.catList = []
-    this.setState({copyOptions: copyOptions})
+    const { projectList = [] } = this.props;
+    const copyOptions = {...this.state.copyOptions};
+    copyOptions.projectList = projectList;
+    copyOptions.catList = [];
+    this.setState({ copyOptions});
   };
   
   searchCategory = async (value) => {
-    await this.props.fetchInterfaceListMenu(value)
-    const { catList = [] } = this.props
-    const copyOptions = {...this.state.copyOptions}
-    copyOptions.catList = catList
-    this.setState({copyOptions: copyOptions})
+    await this.props.fetchCatList(value);
+    const { catList = [] } = this.props;
+    const copyOptions = {...this.state.copyOptions};
+    copyOptions.catList = catList;
+    this.setState({copyOptions});
   };
 
   enterItem = id => {
@@ -589,7 +589,7 @@ class InterfaceMenu extends Component {
                     className="interface-copy-to-icon"
                     onClick={e => {
                       e.stopPropagation();
-                      this.onCopyModel(true)
+                      this.onCopyModel(true, item._id)
                     }}
                     style={{ display: this.state.delIcon == item._id ? 'block' : 'none' }}
                   />

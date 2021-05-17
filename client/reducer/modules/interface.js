@@ -4,6 +4,7 @@ import qs from 'qs';
 const INIT_INTERFACE_DATA = 'yapi/interface/INIT_INTERFACE_DATA';
 const FETCH_INTERFACE_DATA = 'yapi/interface/FETCH_INTERFACE_DATA';
 const FETCH_INTERFACE_LIST_MENU = 'yapi/interface/FETCH_INTERFACE_LIST_MENU';
+const FETCH_CAT_LIST = 'yapi/interface/FETCH_CAT_LIST';
 const DELETE_INTERFACE_DATA = 'yapi/interface/DELETE_INTERFACE_DATA';
 const DELETE_INTERFACE_CAT_DATA = 'yapi/interface/DELETE_INTERFACE_CAT_DATA';
 const UPDATE_INTERFACE_DATA = 'yapi/interface/UPDATE_INTERFACE_DATA';
@@ -46,6 +47,11 @@ export default (state = initialState, action) => {
       return {
         ...state,
         list: action.payload.data.data
+      };
+    case FETCH_CAT_LIST:
+      return {
+        ...state,
+        catList: action.payload.data.data
       };
     case CHANGE_EDIT_STATUS: {
       return {
@@ -133,6 +139,14 @@ export async function fetchInterfaceListMenu(projectId) {
   let result = await axios.get('/api/interface/list_menu?project_id=' + projectId);
   return {
     type: FETCH_INTERFACE_LIST_MENU,
+    payload: result
+  };
+}
+
+export async function fetchCatList(projectId) {
+  let result = await axios.get('/api/interface/list_menu?project_id=' + projectId);
+  return {
+    type: FETCH_CAT_LIST,
     payload: result
   };
 }

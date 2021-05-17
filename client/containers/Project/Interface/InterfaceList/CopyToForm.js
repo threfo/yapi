@@ -25,15 +25,15 @@ class AddInterfaceForm extends Component {
   };
 
   handleGroupChange = value => {
-    const { setFieldsValue } =  this.props.form
-    setFieldsValue({'project_id': ''})
-    setFieldsValue({'catid': ''})
+    const { setFieldsValue } =  this.props.form;
+    setFieldsValue({'project_id': ''});
+    setFieldsValue({'catid': ''});
     this.props.onGroupChange(value);
   }
 
   handleProjectChange = value => {
-    const { setFieldsValue } =  this.props.form
-    setFieldsValue({'catid': ''})
+    const { setFieldsValue } =  this.props.form;
+    setFieldsValue({'catid': ''});
     this.props.onProjectChange(value);
   }
 
@@ -53,7 +53,7 @@ class AddInterfaceForm extends Component {
     return (
       <Form onSubmit={this.handleSubmit}>
         <FormItem {...formItemLayout} label="分组">
-          {getFieldDecorator('path', {
+          {getFieldDecorator('group_id', {
             rules: [
               {
                 required: true,
