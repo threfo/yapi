@@ -107,6 +107,18 @@
     color: #2395f1;
   }
 
+  .interface-copy-to-icon {
+    position: relative;
+    right: 0;
+    float: right;
+    line-height: 25px;
+    width: 24px;
+    font-weight: bold;
+  }
+  .interface-copy-to-icon:hover {
+    color: #00a854;
+  }
+
   .interface-list {
     //max-height: 600px;
     //overflow-y: scroll;

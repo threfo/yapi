@@ -14,10 +14,15 @@ import { getProject } from '../../../../reducer/modules/project.js';
 import { Input, Icon, Button, Modal, message, Tree, Tooltip } from 'antd';
 import AddInterfaceForm from './AddInterfaceForm';
 import AddInterfaceCatForm from './AddInterfaceCatForm';
+import CopyToForm from './CopyToForm';
 import axios from 'axios';
 import { Link, withRouter } from 'react-router-dom';
 import produce from 'immer';
 import { arrayChangeIndex } from '../../../../common.js';
+import {
+  fetchProjectList
+} from '../../../../reducer/modules/project.js';
+import {fetchGroupList} from "../../../../reducer/modules/group";
 
 import './interfaceMenu.scss';
 
@@ -27,11 +32,15 @@ const headHeight = 240; // menu顶部到网页顶部部分的高度
 
 @connect(
   state => {
+    console.log('state', state)
     return {
       list: state.inter.list,
       inter: state.inter.curdata,
       curProject: state.project.currProject,
-      expands: []
+      expands: [],
+      groupList: state.group.groupList,
+      projectList: state.project.projectList,
+      catList: state.inter.list
     };
   },
   {
@@ -42,15 +51,21 @@ const headHeight = 240; // menu顶部到网页顶部部分的高度
     initInterface,
     getProject,
     fetchInterfaceCatList,
-    fetchInterfaceList
+    fetchInterfaceList,
+    fetchGroupList,
+    fetchProjectList
   }
 )
 class InterfaceMenu extends Component {
   static propTypes = {
+    copyOptions:PropTypes.object,
     match: PropTypes.object,
     inter: PropTypes.object,
     projectId: PropTypes.string,
     list: PropTypes.array,
+    groupList: PropTypes.array,
+    projectList: PropTypes.array,
+    catList: PropTypes.array,
     fetchInterfaceListMenu: PropTypes.func,
     curProject: PropTypes.object,
     fetchInterfaceData: PropTypes.func,
@@ -61,8 +76,20 @@ class InterfaceMenu extends Component {
     router: PropTypes.object,
     getProject: PropTypes.func,
     fetchInterfaceCatList: PropTypes.func,
-    fetchInterfaceList: PropTypes.func
+    fetchInterfaceList: PropTypes.func,
+    searchProject: PropTypes.func,
+    searchCategory: PropTypes.func,
+    fetchGroupList: PropTypes.func,
+    fetchProjectList: PropTypes.func
   };
+
+  componentDidMount() {
+    let that = this;
+    new Promise(async function (resolve) {
+      await that.props.fetchGroupList();
+      resolve();
+    });
+  }
 
   /**
    * @param {String} key
@@ -92,7 +119,9 @@ class InterfaceMenu extends Component {
       del_cat_modal_visible: false,
       curCatdata: {},
       expands: null,
-      list: []
+      list: [],
+      copy_modal_visible: false,
+      copyOptions: null
     };
   }
 
@@ -267,6 +296,73 @@ class InterfaceMenu extends Component {
         visible: false
       });
     });
+  };
+
+
+  // handleProjectSearch = value => {
+  //   console.log('handleProjectSearch', value)
+  //   // let that = this;
+  //   // return new Promise(async function (resolve) {
+  //   //   await that.searchProject(value);
+  //   //   resolve();
+  //   // });
+  // };
+
+
+
+  // 提交复制
+  onSubmitCopy = async (params) =>{
+    console.log('params', params)
+    // if (!this.state.selectedCategory || !this.state.selectedProject) {
+    //   return message.error("未选择正确的项目或分类");
+    // }
+    // let interfaceData = await this.props.fetchInterfaceData(this.props.curData._id);
+    // let data = interfaceData.payload.data.data;
+    // let that = this;
+    // let newData = produce(data, draftData => {
+    //   draftData.title = draftData.title + '_copy';
+    //   draftData.path = draftData.path + '_' + Date.now();
+    //   draftData.project_id = parseInt(that.state.selectedProject);
+    //   draftData.catid = parseInt(that.state.selectedCategory);
+    // });
+
+    // axios.post('/api/interface/add', newData).then(async res => {
+    //   if (res.data.errcode !== 0) {
+    //     return message.error(res.data.errmsg);
+    //   }
+    //   message.success('接口复制成功');
+    // });
+  }
+
+  // 打开关闭复制Model
+  onCopyModel = (val) => {
+    this.setState({'copy_modal_visible': val});
+    const copyOptions = {groupList: [], projectList: [], catList: []}
+
+    if(val) {
+      const { groupList = [] } = this.props;
+      copyOptions.groupList = groupList
+      this.setState({copyOptions})
+    } else {
+      this.setState({copyOptions})
+    }
+  }
+
+  searchProject = async (value) => {
+    await this.props.fetchProjectList(value);
+    const { projectList = [] } = this.props
+    const copyOptions = {...this.state.copyOptions}
+    copyOptions.projectList = projectList
+    copyOptions.catList = []
+    this.setState({copyOptions: copyOptions})
+  };
+  
+  searchCategory = async (value) => {
+    await this.props.fetchInterfaceListMenu(value)
+    const { catList = [] } = this.props
+    const copyOptions = {...this.state.copyOptions}
+    copyOptions.catList = catList
+    this.setState({copyOptions: copyOptions})
   };
 
   enterItem = id => {
@@ -487,6 +583,17 @@ class InterfaceMenu extends Component {
                     style={{ display: this.state.delIcon == item._id ? 'block' : 'none' }}
                   />
                 </Tooltip>
+                <Tooltip title="接口复制到">
+                  <Icon
+                    type="copy"
+                    className="interface-copy-to-icon"
+                    onClick={e => {
+                      e.stopPropagation();
+                      this.onCopyModel(true)
+                    }}
+                    style={{ display: this.state.delIcon == item._id ? 'block' : 'none' }}
+                  />
+                </Tooltip>
                 <Tooltip title="复制接口">
                   <Icon
                     type="copy"
@@ -527,6 +634,25 @@ class InterfaceMenu extends Component {
             className="tree-wrappper"
             style={{ maxHeight: parseInt(document.body.clientHeight) - headHeight + 'px' }}
           >
+            {this.state.copy_modal_visible ? (
+              <Modal
+                title="接口复制到"
+                visible={this.state.copy_modal_visible}
+                onCancel={() => this.onCopyModel(false)}
+                footer={null}
+                className="addcatmodal"
+              >
+                <CopyToForm
+                  catdata={this.state.copyOptions}
+                  onGroupChange={this.searchProject}
+                  onProjectChange={this.searchCategory}
+                  onCancel={() => this.onCopyModel(false)}
+                  onSubmit={this.onSubmitCopy}
+                />
+              </Modal>
+            ) : (
+              ''
+            )}
             <Tree
               className="interface-list"
               defaultExpandedKeys={currentKes.expands}
